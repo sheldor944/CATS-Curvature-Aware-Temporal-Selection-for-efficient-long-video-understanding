@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img src="Figures/Gemini_Generated_Image_2v3al42v3al42v3a.png" alt="CATS vs. MIRA — Efficiency and Tradeoff Summary" width="92%">
+  <img src="assets/efficiency_summary.png" alt="CATS vs. MIRA — Efficiency and Tradeoff Summary" width="92%">
 </p>
 <p align="center">
   <em>Figure 1. CATS achieves <strong>~31.6×</strong> faster preprocessing and <strong>~10.7×</strong> lower peak GPU memory than MIRA, while retaining <strong>93–98%</strong> of its accuracy on LongVideoBench and VideoMME.</em>
@@ -29,6 +29,7 @@ Mehrajul Abadin Miraj¹, Abdul Mohaimen Al Radi², Shariful Islam Rayhan¹, Md. 
 
 - [Why CATS](#why-cats)
 - [Method at a Glance](#method-at-a-glance)
+- [Selection Process](#selection-process)
 - [Headline Results](#headline-results)
 - [The TempRel Diagnostic Dataset](#the-temprel-diagnostic-dataset)
 - [Beyond Accuracy: Description Quality](#beyond-accuracy-description-quality)
@@ -51,10 +52,20 @@ Multimodal LLMs cannot ingest every frame of a long video — context budgets fo
 
 CATS occupies the missing middle: it is **content-aware like MIRA, cheap like AKS, and free of dataset-specific hyperparameters**. The key idea is that the *temporal relevance signal* — the score curve of a vision–language model evaluated against the query over time — already encodes where the informative content lies. Reading the **second derivative** of that curve tells us *where to sample densely* and *where to spread out*.
 
+<p align="center">
+  <img src="assets/aks_vs_cats.png" alt="AKS vs CATS — qualitative comparison" width="78%">
+</p>
+<p align="center">
+  <em>Figure 2. Given the same query and budget, AKS distributes frames by a relevance–coverage trade-off and misses the critical moment, leading to a wrong answer. CATS uses temporal curvature to sample densely around the salient event, producing the correct prediction.</em>
+</p>
+
 ## Method at a Glance
 
 <p align="center">
-  <img src="Figures/Gemini_Generated_Image_2v3al42v3al42v3a.png" alt="CATS — efficiency summary" width="80%">
+  <img src="assets/framework_overview.png" alt="CATS framework overview" width="92%">
+</p>
+<p align="center">
+  <em>Figure 3. End-to-end pipeline. A frozen vision–language encoder produces a per-frame relevance signal against the user query. CATS iteratively picks the highest-scoring frame and applies an adaptive suppression mask whose radius is modulated by local curvature and decays with each iteration. The selected keyframes are passed to the MLLM for response generation.</em>
 </p>
 
 Given a video **V** = {F₁, …, F_T} and query **Q**, CATS proceeds in three stages:
@@ -76,7 +87,14 @@ Given a video **V** = {F₁, …, F_T} and query **Q**, CATS proceeds in three s
 
 The procedure is essentially **non-maximum suppression with a spatially varying, temporally decaying window** — adaptive enough to capture both abrupt cuts and slow buildups, simple enough to require no training and no per-dataset tuning.
 
-> See [Sections/4_proposed_method.tex](Sections/4_proposed_method.tex) for the full derivation and [Figures/selection_algorithm.pdf](Figures/selection_algorithm.pdf) for an end-to-end illustration.
+## Selection Process
+
+<p align="center">
+  <img src="assets/selection_algorithm.png" alt="CATS selection process step-by-step" width="92%">
+</p>
+<p align="center">
+  <em>Figure 4. Step-by-step view of CATS. (1) The relevance curve is computed against the query. (2–3) The current maximum is selected and its neighborhood suppressed. (4) Suppression decays across iterations, allowing earlier-suppressed regions to re-emerge. (5) Final frames concentrate around the semantically meaningful events, leading to a correct, well-grounded answer where AKS fails.</em>
+</p>
 
 ## Headline Results
 
@@ -97,6 +115,13 @@ The procedure is essentially **non-maximum suppression with a spatially varying,
 | MIRA | 39.5 h | 91.5 h | 32 GB | 32 GB |
 | **CATS** | **1.25 h** | **3.5 h** | **3 GB** | **3 GB** |
 | **Speedup** | **~31.6×** | **~26.1×** | **~10.7×** | **~10.7×** |
+
+<p align="center">
+  <img src="assets/efficiency_tradeoff.png" alt="Efficiency–accuracy tradeoff: CATS vs MIRA" width="92%">
+</p>
+<p align="center">
+  <em>Figure 5. Efficiency–accuracy frontier. For every 1% of relative accuracy traded, CATS delivers roughly a 6× compute speedup over MIRA.</em>
+</p>
 
 **Robustness across scorers** (LVB / V-MME accuracy at *k* = 32):
 
@@ -126,6 +151,20 @@ The lift is largest in the ER regime, where modeling long-range relevance struct
 
 Multiple-choice accuracy is a noisy proxy — a correct option can be reached from partial cues. We additionally evaluate whether the **selected frames support faithful, grounded descriptions**, scored via an LLM-as-a-judge protocol with two independent judges (Gemini-3-Flash and GPT-5.4).
 
+<p align="center">
+  <img src="assets/verifiability_dense_sampling.png" alt="Verifiability — event-centric dense sampling" width="92%">
+</p>
+<p align="center">
+  <em>Figure 6. Verifiability beyond answer correctness. Both methods predict the correct option, but AKS misses the critical temporal transition and produces a partially inconsistent rationale. CATS performs event-centric dense sampling, capturing the key transition and yielding a coherent, visually grounded description.</em>
+</p>
+
+<p align="center">
+  <img src="assets/future_question.png" alt="From rationale fidelity to future-query reasoning" width="92%">
+</p>
+<p align="center">
+  <em>Figure 7. From rationale fidelity to future-query reasoning. AKS introduces hallucinated details due to missing visual evidence and fails on follow-up questions. CATS preserves critical temporal and contextual information, supporting consistent, evidence-aligned answers to future queries.</em>
+</p>
+
 | Dataset | Gemini-3-Flash Judge | GPT-5.4 Judge |
 |---|:--:|:--:|
 | LongVideoBench | **CATS 60.58** / AKS 39.42 | **CATS 59.46** / AKS 40.54 |
@@ -139,17 +178,14 @@ These descriptions can also serve as a **reusable semantic cache** — a well-gr
 
 ```
 .
-├── Sections/                # Paper source (LaTeX)
-│   ├── 1_Introduction.tex
-│   ├── 2_Background.tex
-│   ├── 3_Related_works.tex
-│   ├── 4_proposed_method.tex
-│   ├── 5_results.tex
-│   ├── 6_Conclusion.tex
-│   └── 7_Appendix.tex
-├── Figures/                 # All paper figures (PDF + PNG)
-├── main.tex                 # TMLR camera-ready entry point
-├── bibliography.bib
+├── assets/                  # Figures rendered for this README
+│   ├── efficiency_summary.png
+│   ├── aks_vs_cats.png
+│   ├── framework_overview.png
+│   ├── selection_algorithm.png
+│   ├── efficiency_tradeoff.png
+│   ├── verifiability_dense_sampling.png
+│   └── future_question.png
 └── README.md
 ```
 
